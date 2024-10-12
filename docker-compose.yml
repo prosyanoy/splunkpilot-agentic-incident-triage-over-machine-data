@@ -1,0 +1,36 @@
+# One command demo:   docker compose up --build --abort-on-container-exit demo
+# Real LLM (optional): SPLUNKPILOT_LLM=ollama docker compose --profile ollama up --build demo
+services:
+  api:
+    build: .
+    environment:
+      SPLUNKPILOT_HEC_TOKEN: ${SPLUNKPILOT_HEC_TOKEN:-dev-hec-token}
+    ports: ["8000:8000"]
+    volumes: ["store:/data"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  demo:
+    build: .
+    depends_on:
+      api: {condition: service_healthy}
+    environment:
+      SPLUNKPILOT_URL: http://api:8000
+      SPLUNKPILOT_HEC_TOKEN: ${SPLUNKPILOT_HEC_TOKEN:-dev-hec-token}
+      SPLUNKPILOT_LLM: ${SPLUNKPILOT_LLM:-mock}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+    command: ["replay", "${SCENARIO:-bad_deploy}", "--remote"]
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    ports: ["11434:11434"]
+    volumes: ["ollama:/root/.ollama"]
+
+volumes:
+  store:
+  ollama:
